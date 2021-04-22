@@ -10,11 +10,13 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using ZXing;
 using ZXing.QrCode;
+using ZXing.QrCode.Internal;
 
 namespace QRCoder
 {
     public partial class Form1 : Form
     {
+        private string bitmapFile = null;
         public Form1()
         {
             InitializeComponent();
@@ -22,14 +24,14 @@ namespace QRCoder
 
         private void Form1_Load(object sender, EventArgs e)
         {
-
+            cboCorrectionCode.SelectedIndex = 0;
         }
 
         private void btnGenerate_Click(object sender, EventArgs e)
         {
             if (!validate()) return;
-                        
-            pictureBox1.Image = generateQRCode(textBox1.Text);
+            Image logo = (bitmapFile == null) ? null : Image.FromFile(bitmapFile);
+            pictureBox1.Image = generateQRCode(textBox1.Text, logo);
         }
 
         private bool validate()
@@ -42,16 +44,48 @@ namespace QRCoder
             return true;
         }
 
-        private Bitmap generateQRCode(string url, int width = 600, int height = 600)
+        private ErrorCorrectionLevel GetCorrectionLevel()
         {
+            switch (cboCorrectionCode.SelectedIndex)
+            {
+                case 0: return ErrorCorrectionLevel.L;
+                case 1: return ErrorCorrectionLevel.M;
+                case 2: return ErrorCorrectionLevel.Q;
+                case 3: return ErrorCorrectionLevel.H;
+            }
+            return ErrorCorrectionLevel.L;
+        }
+
+        private Bitmap generateQRCode(string url, Image logo = null, int width = 600, int height = 600)
+        {
+            var encodingOptions = new QrCodeEncodingOptions
+            {
+                Width = width,
+                Height = height,
+                Margin = 1,
+                PureBarcode = false
+            };
+            encodingOptions.Hints.Add(EncodeHintType.ERROR_CORRECTION, GetCorrectionLevel());
+
             var barcodeWriter = new BarcodeWriter
             {
                 Format = BarcodeFormat.QR_CODE,
-                Options = new QrCodeEncodingOptions { Width = width, Height = height }
-            };
+                Options = encodingOptions
+            };                        
+            var bmpQR = barcodeWriter.Write(textBox1.Text);
 
-            var bmp = barcodeWriter.Write(textBox1.Text);
-            return bmp;
+            if (logo != null)
+            {
+                Graphics g = Graphics.FromImage(bmpQR);
+                g.DrawImage(logo, new Point((bmpQR.Width - logo.Width) / 2, (bmpQR.Height - logo.Height) / 2));
+            }
+
+            return bmpQR;
+        }
+
+        private Image GetLogo(string file)
+        {
+            return Image.FromFile(file);
         }
 
         private void btnSaveAs_Click(object sender, EventArgs e)
@@ -63,7 +97,8 @@ namespace QRCoder
             {
                 try
                 {
-                    Bitmap bmp = generateQRCode(textBox1.Text, 600, 600);
+                    Image logo = (bitmapFile == null) ? null : Image.FromFile(bitmapFile);
+                    Bitmap bmp = generateQRCode(textBox1.Text, logo, 600, 600);
                     bmp.Save(d.FileName, ImageFormat.Png);
 
                     MessageBox.Show("QRCode Saved", "", MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -72,6 +107,17 @@ namespace QRCoder
                 {
                     MessageBox.Show("Error encountered!", "", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
+            }
+        }
+
+        private void btnLogo_Click(object sender, EventArgs e)
+        {
+            OpenFileDialog dlg = new OpenFileDialog { Filter = "PNG|*.png||*.jpg" };
+            if (dlg.ShowDialog() == DialogResult.OK)
+            {
+
+                lblLogo.Text = System.IO.Path.GetFileName(dlg.FileName);
+                bitmapFile = dlg.FileName;
             }
         }
     }
